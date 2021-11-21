@@ -90,12 +90,14 @@ build:
     # returns   $v0: root
     move $s0, $a0   #s0: unorderedList
 
-    subu $sp, $sp, 4
+    subu $sp, $sp, 8
     sw $ra, 0($sp)
+    sw $a0, 4($sp)
 
     li $v0, 9
     li $a0, 16
     syscall
+    sw $a0, 4($sp)
     move $s1, $v0   #s1: root
 
     lw $t0, 0($s0)
@@ -106,7 +108,7 @@ build:
 
     buildLoop:
         addi $s0, $s0, 4
-        lw $t0, 0($s0)              #t0: next value
+        lw $t0, 0($s0)              # t0: next value
         li $t1, -1                  # t1 =- 1
         beq $t0, $t1, buildLoopEnd  # if (t0 !== t1) {
                                     #
@@ -116,7 +118,8 @@ build:
         j buildLoop                 # }
     buildLoopEnd:
         lw $ra, 0($sp)
-        addu $sp, $sp, 4
+        lw $a0, 4($sp)
+        addu $sp, $sp, 8
 
         move $v0, $s1               # return root
         jr $ra
@@ -132,19 +135,20 @@ insert:
     # calls insertToLevel to insert the newNode
     # after insertion calls heapify to make the node tree a max binary heap tree
     # arguments     # $a0: root, $a1: entry
-    subu $sp, $sp, 12
+    subu $sp, $sp, 16
     sw $a0, 0($sp)
-    sw $s0, 4($sp)
-    sw $ra, 8($sp)
+    sw $a1, 4($sp)
+    sw $s0, 8($sp)
+    sw $ra, 12($sp)
+
+    jal getDepth        # getDepth(root)
+    move $t1, $v0       # t1: level
 
     li $v0, 9
     li $a0, 16
     syscall             # s0 = malloc(16)
     move $s0, $v0       # s0: new node
-
-    lw $a0, 0($sp)
-    jal getLevel        # getLevel(root)
-    move $t1, $v0       # t1: level
+    lw $a0, 0($sp)      # fix a0 from
 
     sw $a1, 0($s0)      # node.data = a1
     sw $zero, 4($s0)    # node.left = 0
@@ -160,15 +164,18 @@ insert:
     move $a0, $v0
     jal heapify         # heapify(newNode)
 
-    lw $s0, 4($sp)
-    lw $ra, 8($sp)
-    addu $sp, $sp, 12
+    lw $a0, 0($sp)
+    lw $a1, 4($sp)
+    lw $s0, 8($sp)
+    lw $ra, 12($sp)
+    addu $sp, $sp, 16
     jr $ra
 
 insertToLevel:
     # recursively call himself to reach lower levels until level is 0.
     # when level is 0, tries to insert the newNode to a empty spot at that level.
-    # if there is no empty spot then it returns v0 = 0 which means the insertion is failed for that sub-recursion process
+    # if there is no empty spot then it returns v0 = 0 which means 
+    # the insertion is failed for that sub-recursion process.
     # after insertion returns the newNode
     
     # arguments     # $a0: root, $a1: newNode, $a2: level
@@ -179,18 +186,18 @@ insertToLevel:
 
     bne $a2, $zero, insertToLevelRecusive           # if (level === 0) {
                                                     #
-    lw $t0, 4($a0)          #t0: a1.left            #
+    lw $t0, 4($a0)          #t0: a0.left            #
     bne $t0, $zero, insertToLevelDoesntCheckLeft    #   if (!node.left) {
-    sw $a0, 12($a1)         #a0.parent: a1          #
-    sw $a1, 4($a0)          #a1.left: a0            #
+    sw $a0, 12($a1)         #a1.parent: a0          #
+    sw $a1, 4($a0)          #a0.left: a1            #
     move $v0, $a1                                   #
     j insertToLevelEnd                              #   }
     insertToLevelDoesntCheckLeft:                   #
                                                     #
-    lw $t0, 8($a0)          #t0: a1.right           #
+    lw $t0, 8($a0)          #t0: a0.right           #
     bne $t0, $zero, insertToLevelDoesntCheckRight   #   if (!node.right) {
-    sw $a0, 12($a1)         #a0.parent: a1          #
-    sw $a1, 8($a0)          #a1.right: a0           #
+    sw $a0, 12($a1)         #a1.parent: a0          #
+    sw $a1, 8($a0)          #a0.right: a1           #
     move $v0, $a1                                   #
     j insertToLevelEnd                              #   }
     insertToLevelDoesntCheckRight:                  #
@@ -207,9 +214,7 @@ insertToLevel:
     insertToLevelRecusiveNotLeft:
 
     lw $a0, 4($sp)  # refresh the root
-    lw $a2, 8($sp)  # refresh the level
 
-    subu $a2, $a2, 1                                # level -= 1
     lw $a0, 8($a0)                                  # a0 = a0.right
     jal insertToLevel                               # const right = insertNodeToLevel(node.right, newNode, level - 1);
     beq $v0, $zero, insertToLevelRecusiveNotRight   # if (right) {
@@ -217,7 +222,9 @@ insertToLevel:
     insertToLevelRecusiveNotRight:
     
     insertToLevelEnd:
-        lw $ra, 0($sp)      # insertToLevelEnd
+        lw $ra, 0($sp)
+        lw $a0, 4($sp)
+        lw $a2, 8($sp)
         addu $sp, $sp, 12
         jr $ra
 
@@ -230,7 +237,7 @@ remove:
     # OPTIONAL
 
 
-jr $ra
+    jr $ra
 
 ####################################
 # Print Procedure
@@ -244,7 +251,7 @@ print:
     sw $s7, 8($sp)
     sw $s6, 12($sp)
 
-    jal getLevel    # getLevel(root)
+    jal getDepth    # getDepth(root)
 
     move $s7, $v1   #s7: level max
     li $s6, 0       #s6: i
@@ -262,7 +269,7 @@ print:
 
         lw $a0, 4($sp)
         move $a1, $s6
-        jal traverseCurrentLevel        # traverseCurrenctLevel(node, level)
+        jal traverseLevel        # traverseLevel(node, level)
 
         li $v0, 4
         la $a0, newLine
@@ -274,6 +281,7 @@ print:
 
     printLoop1End:
         lw $ra, 0($sp)
+        lw $a0, 4($sp)
         lw $s7, 8($sp)
         lw $s6, 12($sp)
         addu $sp, $sp, 16
@@ -284,7 +292,7 @@ print:
 # Extra Procedures
 ####################################
 
-getLevel:
+getDepth:
     # returns the depth of the node tree
     # @arguments    # $a0: node
     # @returns      # $v0: min number $v1: max number
@@ -298,37 +306,37 @@ getLevel:
     move $t7, $a0   # left node
     move $t6, $a0   # right node
 
-    getLevelLoop1:                          # while (nodeLeft.left) {
+    getDepthLoop1:                          # while (nodeLeft.left) {
         lw $t0, 4($t7)                      # t0 = nodeLeft.left
-        beq $t0, $zero, getLevelLoop1End    # t0 !== 0;
+        beq $t0, $zero, getDepthLoop1End    # t0 !== 0;
         lw $t7, 4($t7)                      # nodeLeft = nodeLeft.left
         addi $s7, $s7, 1                    # left++
-        j getLevelLoop1                     # }
-    getLevelLoop1End:
+        j getDepthLoop1                     # }
+    getDepthLoop1End:
 
-    getLevelLoop2:                          # while (nodeRight.right) {
+    getDepthLoop2:                          # while (nodeRight.right) {
         lw $t0, 8($t6)                      # t0 = nodeRight.right
-        beq $t0, $zero, getLevelLoop2End    # t0 !== 0;
+        beq $t0, $zero, getDepthLoop2End    # t0 !== 0;
         lw $t6, 8($t6)                      # nodeRight = nodeRight.right
         addi $s6, $s6, 1                    # right ++
-        j getLevelLoop2                     # }
-    getLevelLoop2End:
+        j getDepthLoop2                     # }
+    getDepthLoop2End:
 
     slt $t0, $s7, $s6
-    beq $t0, $zero, getLevelLeftMax
-    j getLevelRightMax
+    beq $t0, $zero, getDepthLeftMax
+    j getDepthRightMax
 
-    getLevelLeftMax:                        # if (right > left) {
+    getDepthLeftMax:                        # if (right > left) {
         move $v0, $s6                       # v0 = left
         move $v1, $s7                       # v1 = right
-        j getLeveLExit                      # {
+        j getDepthExit                      # {
 
-    getLevelRightMax:                       # if (right > right) {
+    getDepthRightMax:                       # if (right > right) {
         move $v0, $s7                       # v0 = right
         move $v1, $s6                       # v1 = left
-        j getLeveLExit                      # }
+        j getDepthExit                      # }
     
-    getLeveLExit:
+    getDepthExit:
         lw $s7, 0($sp)
         lw $s6, 4($sp)
         addu $sp, $sp, 8
@@ -363,40 +371,32 @@ heapify:
     addu $sp, $sp, 4
     jr $ra
 
-traverseCurrentLevel:
+traverseLevel:
     # recursively call himself to reach lower levels until level is 0.
     # when level is 0, prints the values on that level seperated by " ".
     # arguments $a0: node | $a1: level
-
-    subu $sp, $sp, 4
+    subu $sp, $sp, 12
     sw $ra, 0($sp)
+    sw $a0, 4($sp)
+    sw $a1, 8($sp)
 
-    beq $a0, $zero, traverseCurrentLevelDone        # if (node === 0)
+    beq $a0, $zero, traverseLevelDone        # if (node === 0)
+    beq $a1, $zero, traverseLevelPrintDone   # if (level === 0)
 
-    beq $a1, $zero, traverseCurrentLevelPrintDone   # if (level === 0)
+    lw $a0, 4($a0)                      # a0 = a0.left
+    subu $a1, $a1, 1                    # a1 = t7
+    jal traverseLevel                   # traverseLevel(node.left, level - 1)
 
-    move $t6, $a0                       # if (level !== 0) {
-    subu $t7, $a1, 1                    # t7 = level - 1
-                                        #
-    subu $sp, $sp, 8
-    sw $t6, 0($sp)
-    sw $t7, 4($sp)
-                                        #
-    lw $a0, 4($t6)                      # a0 = a0.left
-    move $a1, $t7                       # a1 = t7
-    jal traverseCurrentLevel            # traverseCurrentLevel(node.left, level - 1)
+    lw $a0, 4($sp)  # refresh a0
+    lw $a1, 8($sp)  # refresh a1
 
-    lw $t6, 0($sp)
-    lw $t7, 4($sp)
-    addu $sp, $sp, 8
+    lw $a0, 8($a0)                      # a0 = a0.right
+    subu $a1, $a1, 1                    # a1 = t7
+    jal traverseLevel                   # traverseLevel(node.right, level - 1)
 
-    lw $a0, 8($t6)                      # a0 = a0.right
-    move $a1, $t7                       # a1 = t7
-    jal traverseCurrentLevel            # traverseCurrentLevel(node.right, level - 1)
+    j traverseLevelDone
 
-    j traverseCurrentLevelDone
-
-    traverseCurrentLevelPrintDone:      # if (level === 0) {
+    traverseLevelPrintDone:             # if (level === 0) {
         lw $t1, 0($a0)                  # t1 = node.data
         li $v0, 1                       #
         move $a0, $t1                   #
@@ -406,7 +406,9 @@ traverseCurrentLevel:
         la $a0, space                   #
         syscall                         # print(" ")
                                         # }
-    traverseCurrentLevelDone:
+    traverseLevelDone:
         lw $ra, 0($sp)
-		addu $sp, $sp, 4
+        lw $a0, 4($sp)
+        lw $a1, 8($sp)
+		addu $sp, $sp, 12
 		jr $ra
